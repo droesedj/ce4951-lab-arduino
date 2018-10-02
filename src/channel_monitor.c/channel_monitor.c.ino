@@ -21,7 +21,7 @@ enum State_enum {s_IDLE, s_BUSY, s_COLLISION};
 
 const byte ledPin = 13;
 const byte rxPin = 3;
-const byte txPin = 4;
+const byte txPin = LED_BUILTIN;
 
 // Bit period
 const uint8_t bp = 1000; //1ms, 1000us
@@ -44,11 +44,8 @@ void setup()
   // Initialize the timer.
   Timer1.initialize(t_DELAY);
 
-  //if (DEBUG_PRINT_ENABLE)
-  //{
-    // Init the serial port for debugging purposes.
-    Serial.begin(9600);
-  //}
+  // Init the serial port.
+  Serial.begin(115200);
 
   // Attach the interrupt. Start the timer.
   Timer1.attachInterrupt(timeOut);
@@ -68,6 +65,8 @@ void loop()
       digitalWrite(LED_BUILTIN, LOW);
       debugPrint("I\n");
       if (Serial.available() > 0) {
+        Timer1.stop();
+        delayMicroseconds(400);
         transmitSerial();
       }
       break;
@@ -131,19 +130,23 @@ void debugPrint(char* s)
   }
 }
 
+// Transmits incoming serial data to the 2-wire network.
 void transmitSerial() {
-  Timer1.stop();
   Serial.println("TRANSMIT!");
-  Serial.flush();
 
   String data = "";
+  // While we are not in a collision...
   while (state != s_COLLISION) {
-    while (Serial.available()) {
+    // If the next piece of data is not invalid...
+    if (Serial.peek() != -1) {
       char c = Serial.read();
       data += c;
+      // If the char is a newline, transmit the data and clear our string.
+      if(c == '\n') {
+        trans.transmit(data.c_str(), data.length());
+        data = "";
+      }
     }
-    trans.transmit(data.c_str());
-    break;
   }
 }
 

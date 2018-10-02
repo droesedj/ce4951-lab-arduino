@@ -8,8 +8,6 @@
    @date 10/2/2018
 */
 
-
-
 /// Public Methods + Constructor
 
 Transmitter::Transmitter(byte pin, uint8_t bp) {
@@ -20,19 +18,23 @@ Transmitter::Transmitter(byte pin, uint8_t bp) {
   digitalWrite(txPin, HIGH);
 }
 
-void Transmitter::transmit(byte* data) {
+void Transmitter::transmit(byte* data, int len) {
+  // If the data length is 0, don't do anything.
+  if(len <= 0){
+    return;
+  }
+  
   isTransmitting = true;
-  int len = sizeof(data);
-  Serial.println("\tlen = " + len); 
-  Serial.flush();
+  Serial.print("len = ");
+  Serial.println(len); 
 
   // For every piece of data...
   for (int i = 0; i < len && isTransmitting; i++) {
     // For every bit in a byte...
-    for (byte mask = 0b10000000; mask > 0 && isTransmitting; mask>>=1) {
+    for (int j = 0; j < 8 && isTransmitting; j++) {
       // Start at the MSB. binary AND with 1.  This gives us one bit.
       // Shift the data starting from MSB down to bit 0.
-      byte decision = (data[i] & mask);
+      byte decision = (data[i] >> j) & 0b00000001 ;
       switch (decision) {
         case 0:
           Serial.print("0");
@@ -43,12 +45,15 @@ void Transmitter::transmit(byte* data) {
           sendOne();
           break;
         default:
-          Serial.println("error: " + decision);
+          Serial.print("error: ");
+          Serial.println(decision);
       }
     }
+    Serial.print(" ");
+    Serial.print((char)data[i]);
     Serial.print("\n");
   }
-
+  Serial.flush();
   isTransmitting = false;
 }
 
