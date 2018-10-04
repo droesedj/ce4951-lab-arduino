@@ -14,11 +14,11 @@
 class Transmitter {
 private:
   // Bit-period in microseconds.
-  uint8_t bitPeriod;
+  int bitPeriod;
   // Pin to transmit data on.
   byte txPin;
   // Whether or not we are transmitting.
-  volatile bool isTransmitting;
+  volatile bool isTransmitting = false;
 
   // Sends a manchester-encoded value of '1'.
   void sendOne();
@@ -29,7 +29,7 @@ public:
   // Constructor.
   // pin = pin to use as transmitter.
   // bp = bit period in microseconds.
-  Transmitter(byte pin, uint8_t bp);
+  Transmitter(byte pin, int bp);
 
   // Transmits specified data of a given length to the network.
   // data = pointer to (or array of) data to be sent.

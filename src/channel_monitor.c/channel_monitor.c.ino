@@ -5,12 +5,12 @@
    @filename channel_monitor.c
    @date 9/19/2018
 */
-#include "Arduino.h"
-#include <TimerOne.h>
+//#include "Arduino.h"
+#include "TimerOne.h"
 #include "transmitter.h"
 
 #define DEVICE_ADDRESS 23
-#define DEBUG_PRINT_ENABLE false
+#define DEBUG_PRINT_ENABLE true
 
 void edgeDetect();
 void timeOut();
@@ -19,17 +19,17 @@ void debugPrint(char* s);
 
 enum State_enum {s_IDLE, s_BUSY, s_COLLISION};
 
-const byte ledPin = 13;
 const byte rxPin = 3;
-const byte txPin = LED_BUILTIN;
+const byte txPin = 5;
 
 // Bit period
-const uint8_t bp = 1000; //1ms, 1000us
+const int bp = 1000; //1ms, 1000us
 
 // Maximum allowed time before timing out.
-const uint8_t t_DELAY = 1110; //1.11ms, 1110us
+const int t_DELAY = bp; //1.11ms, 1110us
 
 volatile uint8_t state = s_IDLE;
+volatile bool edge = false;
 
 Transmitter trans(txPin, bp);
 
@@ -41,46 +41,67 @@ void setup()
   // Init the LED pin.
   pinMode(LED_BUILTIN, OUTPUT);
 
+  // Init the serial port.
+  Serial.begin(9600);
+
   // Initialize the timer.
   Timer1.initialize(t_DELAY);
 
-  // Init the serial port.
-  Serial.begin(115200);
-
   // Attach the interrupt. Start the timer.
   Timer1.attachInterrupt(timeOut);
-  Timer1.start();
 
   // Attach edge interrupt.
   attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, CHANGE);
+  // Start the timer.
+  Timer1.start();
 }
 
 void loop()
 {
-  // Restart timer.
-  Timer1.restart();
-  switch (state)
+  // On a rising/falling edge, wait one half bit-period before doing anything
+  if (edge) {
+    Timer1.restart();
+    noInterrupts();
+    edge = false;
+    delayMicroseconds((bp / 2));
+    interrupts();
+  }
+  else
   {
-    case s_IDLE:
-      digitalWrite(LED_BUILTIN, LOW);
-      debugPrint("I\n");
-      if (Serial.available() > 0) {
-        Timer1.stop();
-        delayMicroseconds(400);
-        transmitSerial();
-      }
-      break;
+    switch (state)
+    {
+      case s_IDLE:
+        digitalWrite(LED_BUILTIN, HIGH);
+        digitalWrite(7, HIGH);
+        digitalWrite(6, LOW);
+        //debugPrint("I\n");
+        if (Serial.available() > 0) {
+          noInterrupts();
+          Serial.flush();
+          transmitSerial();
+          interrupts();
+        }
+        break;
 
-    case s_BUSY:
-      digitalWrite(LED_BUILTIN, HIGH);
-      debugPrint("B\n");
-      break;
+      case s_BUSY:
+        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(7, LOW);
+        digitalWrite(6, LOW);
+        //debugPrint("B\n");
+        break;
 
-    case s_COLLISION:
-      digitalWrite(LED_BUILTIN, LOW);
-      trans.cancel();
-      debugPrint("C\n");
-      break;
+      case s_COLLISION:
+        digitalWrite(LED_BUILTIN, HIGH);
+        digitalWrite(6, HIGH);
+        digitalWrite(7, LOW);
+        noInterrupts();
+        trans.cancel();
+        interrupts();
+        //debugPrint("C\n");
+        break;
+      default:
+        debugPrint("NOT GOOD!\n");
+    }
   }
 }
 
@@ -88,17 +109,19 @@ void loop()
 /// Rising/Falling edge ISR.
 void edgeDetect()
 {
-  // Disable timer.
-  Timer1.stop();
-  switch (state)
-  {
-    case s_IDLE:
-      state = s_BUSY;
-      break;
+  if (!edge) {
+    edge = true;
+    /*  switch(state)
+      {
+        case s_IDLE:
+          state = s_BUSY;
+          break;
 
-    default:
-      state = s_BUSY;
-      break;
+        default:
+          state = s_BUSY;
+          break;
+      }*/
+    state = s_BUSY;
   }
 }
 
@@ -106,18 +129,16 @@ void edgeDetect()
 /// Timer ISR.
 void timeOut()
 {
-  // Disable timer.
-  Timer1.stop();
-  // Read the RX pin.
-  int rxVal = digitalRead(rxPin);
-
-  if (rxVal == HIGH)
-  {
-    state = s_IDLE;
-  }
-  else
-  {
-    state = s_COLLISION;
+  if (!edge && state == s_BUSY) {
+    int rxVal = digitalRead(rxPin);
+    if (rxVal == HIGH)
+    {
+      state = s_IDLE;
+    }
+    else
+    {
+      state = s_COLLISION;
+    }
   }
 }
 
@@ -132,21 +153,22 @@ void debugPrint(char* s)
 
 // Transmits incoming serial data to the 2-wire network.
 void transmitSerial() {
-  Serial.println("TRANSMIT!");
+  noInterrupts();
+  // Serial.println("TRANSMIT!");
 
   String data = "";
   // While we are not in a collision...
-  while (state != s_COLLISION) {
+  while (state != s_COLLISION && Serial.peek() != -1) {
     // If the next piece of data is not invalid...
-    if (Serial.peek() != -1) {
       char c = Serial.read();
       data += c;
       // If the char is a newline, transmit the data and clear our string.
-      if(c == '\n') {
+      if (c == '\n') {
         trans.transmit(data.c_str(), data.length());
-        data = "";
-      }
     }
   }
+  interrupts();
+  debugPrint("END OF transmitSerial()\n");
+  Serial.flush();
 }
 

@@ -10,10 +10,9 @@
 
 /// Public Methods + Constructor
 
-Transmitter::Transmitter(byte pin, uint8_t bp) {
+Transmitter::Transmitter(byte pin, int bp) {
   txPin = pin;
   bitPeriod = bp;
-  isTransmitting = false;
   pinMode(txPin, OUTPUT);
   digitalWrite(txPin, HIGH);
 }
@@ -31,6 +30,8 @@ void Transmitter::transmit(byte* data, int len) {
   // For every piece of data...
   for (int i = 0; i < len && isTransmitting; i++) {
     // For every bit in a byte...
+    Serial.print(i);
+    Serial.print('\t');
     for (int j = 0; j < 8 && isTransmitting; j++) {
       // Start at the MSB. binary AND with 1.  This gives us one bit.
       // Shift the data starting from MSB down to bit 0.
@@ -47,14 +48,16 @@ void Transmitter::transmit(byte* data, int len) {
         default:
           Serial.print("error: ");
           Serial.println(decision);
+          break;
       }
     }
     Serial.print(" ");
     Serial.print((char)data[i]);
-    Serial.print("\n");
+    Serial.print('\n');
   }
-  Serial.flush();
   isTransmitting = false;
+  digitalWrite(txPin, HIGH);
+  //Serial.flush();
 }
 
 void Transmitter::cancel() {
@@ -62,6 +65,7 @@ void Transmitter::cancel() {
     digitalWrite(txPin, HIGH);
   }
   isTransmitting = false;
+  digitalWrite(txPin, HIGH);
 }
 
 /// Private Methods
