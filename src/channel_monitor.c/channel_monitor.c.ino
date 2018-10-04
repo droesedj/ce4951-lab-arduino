@@ -5,12 +5,11 @@
    @filename channel_monitor.c
    @date 9/19/2018
 */
-//#include "Arduino.h"
 #include "TimerOne.h"
 #include "transmitter.h"
 
 #define DEVICE_ADDRESS 23
-#define DEBUG_PRINT_ENABLE true
+#define DEBUG_PRINT_ENABLE false
 
 void edgeDetect();
 void timeOut();
@@ -26,10 +25,13 @@ const byte txPin = 5;
 const int bp = 1000; //1ms, 1000us
 
 // Maximum allowed time before timing out.
-const int t_DELAY = bp; //1.11ms, 1110us
+const int t_DELAY = bp;
 
 volatile uint8_t state = s_IDLE;
 volatile bool edge = false;
+
+// Serial data to be sent is stored here.
+String txData = "";
 
 Transmitter trans(txPin, bp);
 
@@ -75,11 +77,14 @@ void loop()
         digitalWrite(7, HIGH);
         digitalWrite(6, LOW);
         //debugPrint("I\n");
-        if (Serial.available() > 0) {
-          noInterrupts();
-          Serial.flush();
-          transmitSerial();
-          interrupts();
+        while (Serial.available() > 0) {
+          char c = Serial.read();
+          txData.concat(c);
+          if (c == '\n') {
+            transmitSerial();
+            // "clear" the string buffer
+            txData = "";
+          }
         }
         break;
 
@@ -111,16 +116,6 @@ void edgeDetect()
 {
   if (!edge) {
     edge = true;
-    /*  switch(state)
-      {
-        case s_IDLE:
-          state = s_BUSY;
-          break;
-
-        default:
-          state = s_BUSY;
-          break;
-      }*/
     state = s_BUSY;
   }
 }
@@ -154,21 +149,12 @@ void debugPrint(char* s)
 // Transmits incoming serial data to the 2-wire network.
 void transmitSerial() {
   noInterrupts();
-  // Serial.println("TRANSMIT!");
-
-  String data = "";
   // While we are not in a collision...
-  while (state != s_COLLISION && Serial.peek() != -1) {
-    // If the next piece of data is not invalid...
-      char c = Serial.read();
-      data += c;
-      // If the char is a newline, transmit the data and clear our string.
-      if (c == '\n') {
-        trans.transmit(data.c_str(), data.length());
-    }
+  while (state != s_COLLISION) {
+    trans.transmit(txData.c_str(), txData.length());
+    break;
   }
   interrupts();
   debugPrint("END OF transmitSerial()\n");
-  Serial.flush();
 }
 
