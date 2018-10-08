@@ -8,6 +8,7 @@
    @date 10/2/2018
 */
 
+
 /// Public Methods + Constructor
 
 Transmitter::Transmitter(byte pin, int bp) {
@@ -83,4 +84,5 @@ void Transmitter::sendZero() {
   digitalWrite(txPin, LOW);
   delayMicroseconds(bitPeriod / 2);
 }
+
 

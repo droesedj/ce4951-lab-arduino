@@ -10,6 +10,7 @@
 
 #define DEVICE_ADDRESS 23
 #define DEBUG_PRINT_ENABLE false
+#define DEBUG_COMMANDS_ENABLE true
 
 void edgeDetect();
 void timeOut();
@@ -101,6 +102,7 @@ void loop()
         digitalWrite(7, LOW);
         noInterrupts();
         trans.cancel();
+        txData = "";
         interrupts();
         //debugPrint("C\n");
         break;
@@ -148,13 +150,30 @@ void debugPrint(char* s)
 
 // Transmits incoming serial data to the 2-wire network.
 void transmitSerial() {
-  noInterrupts();
   // While we are not in a collision...
   while (state != s_COLLISION) {
-    trans.transmit(txData.c_str(), txData.length());
-    break;
+    if (DEBUG_COMMANDS_ENABLE) {
+      if (txData.startsWith("DEV_0")) {
+        // send 8 zeroes.
+        byte data[] = {0b00000000};
+        trans.transmit(data, 1);
+      } else if (txData.startsWith("DEV_1")) {
+        // send 8 ones.
+        byte data[] = {0b11111111};
+        trans.transmit(data, 1);
+      } else if (txData.startsWith("DEV_LOOP")) {
+        // send a loop of ones.
+        while (state != s_COLLISION) {
+          byte data = {0b11111111};
+          trans.transmit(data, 1);
+        }
+      }
+      break;
+    } else {
+      trans.transmit(txData.c_str(), txData.length());
+      break;
+    }
   }
-  interrupts();
   debugPrint("END OF transmitSerial()\n");
 }
 
