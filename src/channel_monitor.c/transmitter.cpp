@@ -25,25 +25,33 @@ void Transmitter::transmit(byte* data, int len) {
   }
   
   isTransmitting = true;
-  Serial.print("len = ");
-  Serial.println(len); 
+  //Serial.print("len = ");
+  //Serial.println(len); 
 
   // For every piece of data...
   for (int i = 0; i < len && isTransmitting; i++) {
     // For every bit in a byte...
-    Serial.print(i);
-    Serial.print('\t');
+    //Serial.print(i);
+    //Serial.print('\t');
     for (int j = 0; j < 8 && isTransmitting; j++) {
+
+      //If the rx line goes low, assume collision.
+      int rxVal = digitalRead(3);
+      if(rxVal == LOW){
+        isTransmitting = false;
+        return;
+      }
+      
       // Start at the MSB. binary AND with 1.  This gives us one bit.
       // Shift the data starting from MSB down to bit 0.
       byte decision = (data[i] >> j) & 0b00000001 ;
       switch (decision) {
         case 0:
-          Serial.print("0");
+          //Serial.print("0");
           sendZero();
           break;
         case 1:
-          Serial.print("1");
+          //Serial.print("1");
           sendOne();
           break;
         default:
@@ -52,13 +60,13 @@ void Transmitter::transmit(byte* data, int len) {
           break;
       }
     }
-    Serial.print(" ");
-    Serial.print((char)data[i]);
-    Serial.print('\n');
+    //Serial.print(" ");
+    //Serial.print((char)data[i]);
+    //Serial.print('\n');
   }
   isTransmitting = false;
   digitalWrite(txPin, HIGH);
-  //Serial.flush();
+  Serial.flush();
 }
 
 void Transmitter::cancel() {
@@ -73,16 +81,16 @@ void Transmitter::cancel() {
 
 void Transmitter::sendOne() {
   digitalWrite(txPin, LOW);
-  delayMicroseconds(bitPeriod / 2);
+  delayMicroseconds((bitPeriod / 2) - 15);
   digitalWrite(txPin, HIGH);
-  delayMicroseconds(bitPeriod / 2);
+  delayMicroseconds((bitPeriod / 2) - 15);
 }
 
 void Transmitter::sendZero() {
   digitalWrite(txPin, HIGH);
-  delayMicroseconds(bitPeriod / 2);
+  delayMicroseconds((bitPeriod / 2) - 15);
   digitalWrite(txPin, LOW);
-  delayMicroseconds(bitPeriod / 2);
+  delayMicroseconds((bitPeriod / 2) - 15);
 }
 
 

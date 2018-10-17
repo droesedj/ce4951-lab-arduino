@@ -74,11 +74,12 @@ void loop()
     switch (state)
     {
       case s_IDLE:
-        digitalWrite(LED_BUILTIN, HIGH);
+        digitalWrite(LED_BUILTIN, LOW);
         digitalWrite(7, HIGH);
         digitalWrite(6, LOW);
         //debugPrint("I\n");
-        while (Serial.available() > 0) {
+        if (Serial.available() > 0) {
+          //state = s_BUSY;
           char c = Serial.read();
           txData.concat(c);
           if (c == '\n') {
@@ -100,10 +101,10 @@ void loop()
         digitalWrite(LED_BUILTIN, HIGH);
         digitalWrite(6, HIGH);
         digitalWrite(7, LOW);
-        noInterrupts();
+        //noInterrupts();
         trans.cancel();
         txData = "";
-        interrupts();
+        //interrupts();
         //debugPrint("C\n");
         break;
       default:
@@ -157,22 +158,35 @@ void transmitSerial() {
         // send 8 zeroes.
         byte data[] = {0b00000000};
         trans.transmit(data, 1);
+        return;
       } else if (txData.startsWith("DEV_1")) {
         // send 8 ones.
         byte data[] = {0b11111111};
         trans.transmit(data, 1);
+        return;
       } else if (txData.startsWith("DEV_LOOP")) {
         // send a loop of ones.
         while (state != s_COLLISION) {
           byte data = {0b11111111};
           trans.transmit(data, 1);
+          //If the rx line goes low, assume collision.
+          int rxVal = digitalRead(3);
+          if (rxVal == LOW) {
+            //isTransmitting = false;
+            return;
+          }
         }
+        
+      } else {
+        trans.transmit(txData.c_str(), txData.length());
+        break;
       }
-      break;
+
     } else {
       trans.transmit(txData.c_str(), txData.length());
       break;
     }
+    txData = "";
   }
   debugPrint("END OF transmitSerial()\n");
 }
