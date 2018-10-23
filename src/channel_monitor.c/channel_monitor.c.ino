@@ -31,6 +31,15 @@ const int t_DELAY = bp;
 volatile uint8_t state = s_IDLE;
 volatile bool edge = false;
 
+
+/// RECEIVER VARIABLES ///
+
+volatile int bit_index = 0;
+volatile byte rxData = 0;
+volatile byte rxDataBuffer = 0;
+
+////////////////////////
+
 // Serial data to be sent is stored here.
 String txData = "";
 
@@ -44,11 +53,13 @@ void setup()
   // Init the LED pin.
   pinMode(LED_BUILTIN, OUTPUT);
 
+  //pinMode(6, OUTPUT);
+
   // Init the serial port.
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Initialize the timer.
-  Timer1.initialize(t_DELAY);
+  Timer1.initialize(bp);
 
   // Attach the interrupt. Start the timer.
   Timer1.attachInterrupt(timeOut);
@@ -61,55 +72,58 @@ void setup()
 
 void loop()
 {
-  // On a rising/falling edge, wait one half bit-period before doing anything
-  if (edge) {
-    Timer1.restart();
-    noInterrupts();
-    edge = false;
-    delayMicroseconds((bp / 2));
-    interrupts();
-  }
-  else
+  switch (state)
   {
-    switch (state)
-    {
-      case s_IDLE:
-        digitalWrite(LED_BUILTIN, LOW);
-        digitalWrite(7, HIGH);
-        digitalWrite(6, LOW);
-        //debugPrint("I\n");
-        if (Serial.available() > 0) {
-          //state = s_BUSY;
-          char c = Serial.read();
-          txData.concat(c);
-          if (c == '\n') {
-            transmitSerial();
-            // "clear" the string buffer
-            txData = "";
-          }
+    case s_IDLE:
+      digitalWrite(LED_BUILTIN, LOW);
+      //digitalWrite(7, HIGH);
+      //digitalWrite(6, LOW);
+      //debugPrint("I\n");
+      if (Serial.available() > 0) {
+        //state = s_BUSY;
+        char c = Serial.read();
+        txData.concat(c);
+        if (c == '\n') {
+          transmitSerial();
+          // "clear" the string buffer
+          txData = "";
         }
-        break;
+      }
+      break;
 
-      case s_BUSY:
-        digitalWrite(LED_BUILTIN, LOW);
-        digitalWrite(7, LOW);
-        digitalWrite(6, LOW);
-        //debugPrint("B\n");
-        break;
+    case s_BUSY:
+      //digitalWrite(LED_BUILTIN, HIGH);
+      //digitalWrite(7, LOW);
+      //digitalWrite(6, LOW);
+      //debugPrint("B\n");
+      //noInterrupts();
+      if (bit_index > 7) {
+        //char c = rxData;
+        //Serial.print(' ');
+        //Serial.println(rxData);
+        bit_index = 0;
+        rxData = rxDataBuffer;
+        rxDataBuffer = 0;
+        Serial.println(rxData);
+      }
+      //interrupts();
+      break;
 
-      case s_COLLISION:
-        digitalWrite(LED_BUILTIN, HIGH);
-        digitalWrite(6, HIGH);
-        digitalWrite(7, LOW);
-        //noInterrupts();
-        trans.cancel();
-        txData = "";
-        //interrupts();
-        //debugPrint("C\n");
-        break;
-      default:
-        debugPrint("NOT GOOD!\n");
-    }
+    case s_COLLISION:
+      digitalWrite(LED_BUILTIN, HIGH);
+      //digitalWrite(6, HIGH);
+      //digitalWrite(7, LOW);
+      //noInterrupts();
+      Serial.println();
+      trans.cancel();
+      txData = "";
+      bit_index = 0;
+      rxDataBuffer = 0;
+      //interrupts();
+      //debugPrint("C\n");
+      break;
+    default:
+      debugPrint("NOT GOOD!\n");
   }
 }
 
@@ -117,10 +131,29 @@ void loop()
 /// Rising/Falling edge ISR.
 void edgeDetect()
 {
-  if (!edge) {
-    edge = true;
-    state = s_BUSY;
+  Timer1.stop();
+  detachInterrupt(digitalPinToInterrupt(rxPin));
+
+  state = s_BUSY;
+  int rxVal;
+  if (bit_index < 8) {
+    //digitalWrite(6, LOW);
+    delayMicroseconds((bp/2) + (bp *0.0132));
+    //digitalWrite(6, HIGH);
+    rxVal = digitalRead(rxPin);
+    rxDataBuffer = (rxDataBuffer << 1) | rxVal;
+    bit_index++;
+    // Serial.print(rxVal);
   }
+
+
+  if(rxVal == 0){
+  attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, RISING);
+  } else {
+    attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, FALLING);
+  }
+  Timer1.restart();
+  Timer1.start();
 }
 
 
@@ -170,13 +203,13 @@ void transmitSerial() {
           byte data = {0b11111111};
           trans.transmit(data, 1);
           //If the rx line goes low, assume collision.
-          int rxVal = digitalRead(3);
+          int rxVal = digitalRead(rxPin);
           if (rxVal == LOW) {
             //isTransmitting = false;
             return;
           }
         }
-        
+
       } else {
         trans.transmit(txData.c_str(), txData.length());
         break;
