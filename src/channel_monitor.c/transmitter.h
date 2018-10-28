@@ -34,7 +34,7 @@ public:
   // Transmits specified data of a given length to the network.
   // data = pointer to (or array of) data to be sent.
   // len = size of the data in bytes.
-  void transmit(byte* data, int len);
+  bool transmit(byte* data, int len);
 
   // Cancels the current transmission, ceasing all outgoing packets.
   void cancel();

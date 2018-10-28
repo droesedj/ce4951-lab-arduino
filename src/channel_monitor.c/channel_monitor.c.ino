@@ -7,6 +7,7 @@
 */
 #include "TimerOne.h"
 #include "transmitter.h"
+#include "packet.h"
 
 #define DEVICE_ADDRESS 23
 #define DEBUG_PRINT_ENABLE false
@@ -16,6 +17,7 @@ void edgeDetect();
 void timeOut();
 void transmitSerial();
 void debugPrint(char* s);
+void wipeRxData();
 
 enum State_enum {s_IDLE, s_BUSY, s_COLLISION};
 
@@ -35,7 +37,8 @@ volatile bool edge = false;
 /// RECEIVER VARIABLES ///
 
 volatile int bit_index = 0;
-volatile byte rxData = 0;
+volatile int rx_index = 0;
+volatile byte rxData[512];
 volatile byte rxDataBuffer = 0;
 
 ////////////////////////
@@ -76,9 +79,6 @@ void loop()
   {
     case s_IDLE:
       digitalWrite(LED_BUILTIN, LOW);
-      //digitalWrite(7, HIGH);
-      //digitalWrite(6, LOW);
-      //debugPrint("I\n");
       if (Serial.available() > 0) {
         //state = s_BUSY;
         char c = Serial.read();
@@ -88,39 +88,33 @@ void loop()
           // "clear" the string buffer
           txData = "";
         }
+      } else if(rx_index > 0){
+        //TODO: print the recieved data, wipe the buffer.
+        Packet pkt = Packet(rxData, rx_index);
+        Serial.println(pkt.GetSummary().c_str());
+        WipeRxData();
       }
       break;
 
     case s_BUSY:
-      //digitalWrite(LED_BUILTIN, HIGH);
-      //digitalWrite(7, LOW);
-      //digitalWrite(6, LOW);
-      //debugPrint("B\n");
-      //noInterrupts();
       if (bit_index > 7) {
         //char c = rxData;
         //Serial.print(' ');
         //Serial.println(rxData);
         bit_index = 0;
-        rxData = rxDataBuffer;
+        rxData[rx_index] = rxDataBuffer;
         rxDataBuffer = 0;
-        Serial.println(rxData);
+        rx_index++;
+        //Serial.println(rxData);
       }
-      //interrupts();
       break;
 
     case s_COLLISION:
       digitalWrite(LED_BUILTIN, HIGH);
-      //digitalWrite(6, HIGH);
-      //digitalWrite(7, LOW);
-      //noInterrupts();
       Serial.println();
       trans.cancel();
       txData = "";
-      bit_index = 0;
-      rxDataBuffer = 0;
-      //interrupts();
-      //debugPrint("C\n");
+      WipeRxData();
       break;
     default:
       debugPrint("NOT GOOD!\n");
@@ -134,24 +128,26 @@ void edgeDetect()
   Timer1.stop();
   detachInterrupt(digitalPinToInterrupt(rxPin));
 
-  state = s_BUSY;
+
   int rxVal;
-  if (bit_index < 8) {
-    //digitalWrite(6, LOW);
-    delayMicroseconds((bp/2) + (bp *0.0132));
-    //digitalWrite(6, HIGH);
-    rxVal = digitalRead(rxPin);
-    rxDataBuffer = (rxDataBuffer << 1) | rxVal;
-    bit_index++;
-    // Serial.print(rxVal);
+  if (state == s_BUSY) {
+    if (bit_index < 8) {
+      //digitalWrite(6, LOW);
+      delayMicroseconds((bp / 2) + (bp * 0.0132));
+      //digitalWrite(6, HIGH);
+      rxVal = digitalRead(rxPin);
+      rxDataBuffer = (rxDataBuffer << 1) | rxVal;
+      bit_index++;
+      // Serial.print(rxVal);
+    }
+    if (rxVal == 0) {
+      attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, RISING);
+    } else {
+      attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, FALLING);
+    }
   }
 
-
-  if(rxVal == 0){
-  attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, RISING);
-  } else {
-    attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, FALLING);
-  }
+  state = s_BUSY;
   Timer1.restart();
   Timer1.start();
 }
@@ -222,5 +218,14 @@ void transmitSerial() {
     txData = "";
   }
   debugPrint("END OF transmitSerial()\n");
+}
+
+void WipeRxData() {
+  for (int i = 0; i < sizeof(rxData); i++) {
+    rxData[i] = 0;
+  }
+  bit_index = 0;
+  rx_index = 0;
+  rxDataBuffer = 0;
 }
 

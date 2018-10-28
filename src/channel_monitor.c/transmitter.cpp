@@ -18,7 +18,7 @@ Transmitter::Transmitter(byte pin, int bp) {
   digitalWrite(txPin, HIGH);
 }
 
-void Transmitter::transmit(byte* data, int len) {
+bool Transmitter::transmit(byte* data, int len) {
   // If the data length is 0, don't do anything.
   if(len <= 0){
     return;
@@ -39,7 +39,7 @@ void Transmitter::transmit(byte* data, int len) {
       int rxVal = digitalRead(3);
       if(rxVal == LOW){
         isTransmitting = false;
-        return;
+        return false;
       }
       
       // Start at the MSB. binary AND with 1.  This gives us one bit.
@@ -67,6 +67,7 @@ void Transmitter::transmit(byte* data, int len) {
   isTransmitting = false;
   digitalWrite(txPin, HIGH);
   Serial.flush();
+  return true;
 }
 
 void Transmitter::cancel() {
