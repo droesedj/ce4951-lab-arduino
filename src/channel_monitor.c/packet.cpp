@@ -36,9 +36,9 @@ Packet::Packet(byte* data, int len) {
 
     // offset for where data begins.
     int offset = 6;
-    // Loop through the data message
+    // Loop through the data message, flip the data to be correct.
     for (int i = 0; i < mLength; i++) {
-      mData[i] = data[offset];
+      mData[(mLength - 1) - i] = data[offset + i];
       offset++;
     }
 

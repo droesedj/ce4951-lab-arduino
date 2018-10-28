@@ -10,6 +10,7 @@
 #include "packet.h"
 
 #define DEVICE_ADDRESS 23
+#define TARGET_ADDRESS 0
 #define DEBUG_PRINT_ENABLE false
 #define DEBUG_COMMANDS_ENABLE true
 
@@ -91,6 +92,9 @@ void loop()
       } else if(rx_index > 0){
         //TODO: print the recieved data, wipe the buffer.
         Packet pkt = Packet(rxData, rx_index);
+        if(!pkt.CRC8_valid){
+          Serial.println("WARNING! THE FOLLOWING PACKET'S CRC DOES NOT MATCH THE HEADER!!!");
+        }
         Serial.println(pkt.GetSummary().c_str());
         WipeRxData();
       }
@@ -207,12 +211,18 @@ void transmitSerial() {
         }
 
       } else {
-        trans.transmit(txData.c_str(), txData.length());
+        //trans.transmit(txData.c_str(), txData.length());
+        Packet outPkt = Packet(txData.c_str(), txData.length(), DEVICE_ADDRESS, TARGET_ADDRESS);
+        Serial.println(outPkt.GetSummary().c_str());
+        outPkt.Transmit(trans);
         break;
       }
 
     } else {
-      trans.transmit(txData.c_str(), txData.length());
+      //trans.transmit(txData.c_str(), txData.length());
+      Packet outPkt = Packet(txData.c_str(), txData.length(), DEVICE_ADDRESS, TARGET_ADDRESS);
+      Serial.println(outPkt.GetSummary().c_str());
+      outPkt.Transmit(trans);
       break;
     }
     txData = "";
