@@ -15,12 +15,16 @@ Packet::Packet(byte* data, int len, byte source, byte dest) {
   mDestination = dest;
   mLength = len;
 
+  f_CRC = 0x01;
+
   // initialize mData to value of data
   for (int i = 0; i < mLength; i++) {
     mData[i] = data[i];
   }
 
-  mCRC8 = crc8ccitt(data, mLength);
+  if (f_CRC == 0x01) {
+    mCRC8 = crc8ccitt(data, mLength);
+  }
   CRC8_valid = true;
 }
 
@@ -42,12 +46,20 @@ Packet::Packet(byte* data, int len) {
       offset++;
     }
 
-    mCRC8 = data[offset];
+    if (f_CRC == 0x01) {
+      
+      mCRC8 = data[offset];
 
-    // Calculate the CRC8 manually.
-    byte test_CRC8 = crc8ccitt(mData, mLength);
-
-    CRC8_valid = (mCRC8 == test_CRC8);
+      // Calculate the CRC8 manually.
+      byte test_CRC8 = crc8ccitt(mData, mLength);
+      if(mCRC8 == test_CRC8){
+        CRC8_valid = true;
+      } else {
+        CRC8_valid = false;
+      }
+    } else {
+      CRC8_valid = true;
+    }
   }
 }
 
@@ -55,45 +67,55 @@ Packet::Packet(byte* data, int len) {
 bool Packet::Transmit(Transmitter trans) {
   // Sync signal
   if (!trans.transmit(mSynch, sizeof(byte))) {
+    Serial.println("failed during synch");
     return false;
   }
   // Version
   if (!trans.transmit(mVer, sizeof(byte))) {
+    Serial.println("failed during version");
     return false;
   }
   // Source
   if (!trans.transmit(mSource, sizeof(byte))) {
+    Serial.println("failed during source");
     return false;
   }
   // Destination
   if (!trans.transmit(mDestination, sizeof(byte))) {
+    Serial.println("failed during dest");
     return false;
   }
   // CRC flag
   if (!trans.transmit(f_CRC, sizeof(byte))) {
+    Serial.println("failed during f_crc");
     return false;
   }
   // Length
   if (!trans.transmit(mLength, sizeof(byte))) {
+    Serial.println("failed during length");
     return false;
   }
   // Data
   if (!trans.transmit(mData, mLength)) {
+    Serial.println("failed during data");
     return false;
   }
   // CRC8
-  if (!trans.transmit(mCRC8, sizeof(byte))) {
-    return false;
+  if (f_CRC == 0x01) {
+    if (!trans.transmit(mCRC8, sizeof(byte))) {
+      Serial.println("failed during crc8");
+      return false;
+    }
   }
 
   // Everything transmitted correctly.
   return true;
 }
 
-String Packet::GetDataString(){
+String Packet::GetDataString() {
   String retVal;
 
-  for(int i = 0; i < mLength; i++){
+  for (int i = 0; i < mLength; i++) {
     char c = mData[i];
     retVal.concat(c);
   }
@@ -101,7 +123,7 @@ String Packet::GetDataString(){
   return retVal;
 }
 
-String Packet::GetSummary(){
+String Packet::GetSummary() {
   String retVal;
   retVal.concat("Sync:\t");
   retVal.concat(mSynch);
@@ -118,9 +140,21 @@ String Packet::GetSummary(){
   retVal.concat("\nData:\t");
   retVal.concat(GetDataString());
   retVal.concat("\nCRC8:\t");
-  retVal.concat(mCRC8);
-  
-  return retVal;  
+  if(f_CRC == 0x01){
+    retVal.concat(mCRC8);
+  } else {
+    retVal.concat("N/A");
+  }
+
+  return retVal;
+}
+
+byte Packet::GetSource(){
+  return mSource;
+}
+
+byte Packet::GetDestination(){
+  return mDestination;
 }
 
 /*

@@ -13,6 +13,7 @@
 #define TARGET_ADDRESS 0
 #define DEBUG_PRINT_ENABLE false
 #define DEBUG_COMMANDS_ENABLE true
+#define READ_ALL_MESSAGES true
 
 void edgeDetect();
 void timeOut();
@@ -52,7 +53,10 @@ Transmitter trans(txPin, bp);
 void setup()
 {
   // Init the Rx Pin
-  pinMode(rxPin, INPUT_PULLUP);
+  pinMode(rxPin, INPUT);
+
+  pinMode(txPin, OUTPUT);
+  digitalWrite(txPin, HIGH);
 
   // Init the LED pin.
   pinMode(LED_BUILTIN, OUTPUT);
@@ -89,14 +93,31 @@ void loop()
           // "clear" the string buffer
           txData = "";
         }
-      } else if(rx_index > 0){
+      } else if (rx_index > 0 && bit_index == 0) {
         //TODO: print the recieved data, wipe the buffer.
-        Packet pkt = Packet(rxData, rx_index);
-        if(!pkt.CRC8_valid){
-          Serial.println("WARNING! THE FOLLOWING PACKET'S CRC DOES NOT MATCH THE HEADER!!!");
+        noInterrupts();
+        // If we don't care where the message is *supposed* to go.
+        if (READ_ALL_MESSAGES) {
+          //Serial.println("RECEIVED:");
+          Packet pkt = Packet(rxData, rx_index);
+          if (!pkt.CRC8_valid) {
+            Serial.println("WARNING! THE FOLLOWING PACKET'S CRC DOES NOT MATCH THE HEADER!!!");
+          }
+          //Serial.println(pkt.GetSummary().c_str());
+          WipeRxData();
+        } else {
+          // Only read messages with a destination that matches the device's address.
+          Packet pkt = Packet(rxData, rx_index);
+          if (pkt.GetDestination() == DEVICE_ADDRESS || pkt.GetDestination() == 0x00) {
+            //Serial.println("RECEIVED:");
+            if (!pkt.CRC8_valid) {
+              Serial.println("WARNING! THE FOLLOWING PACKET'S CRC DOES NOT MATCH THE HEADER!!!");
+            }
+            //Serial.println(pkt.GetSummary().c_str());
+            WipeRxData();
+          }
         }
-        Serial.println(pkt.GetSummary().c_str());
-        WipeRxData();
+        interrupts();
       }
       break;
 
@@ -105,11 +126,11 @@ void loop()
         //char c = rxData;
         //Serial.print(' ');
         //Serial.println(rxData);
+        //Serial.println("@");
         bit_index = 0;
         rxData[rx_index] = rxDataBuffer;
         rxDataBuffer = 0;
         rx_index++;
-        //Serial.println(rxData);
       }
       break;
 
@@ -131,7 +152,8 @@ void edgeDetect()
 {
   Timer1.stop();
   detachInterrupt(digitalPinToInterrupt(rxPin));
-
+  //Serial.println("EDGE");
+  state = s_BUSY;
 
   int rxVal;
   if (state == s_BUSY) {
@@ -142,7 +164,7 @@ void edgeDetect()
       rxVal = digitalRead(rxPin);
       rxDataBuffer = (rxDataBuffer << 1) | rxVal;
       bit_index++;
-      // Serial.print(rxVal);
+      //Serial.print(rxVal);
     }
     if (rxVal == 0) {
       attachInterrupt(digitalPinToInterrupt(rxPin), edgeDetect, RISING);
@@ -151,7 +173,7 @@ void edgeDetect()
     }
   }
 
-  state = s_BUSY;
+  //state = s_BUSY;
   Timer1.restart();
   Timer1.start();
 }
@@ -213,16 +235,35 @@ void transmitSerial() {
       } else {
         //trans.transmit(txData.c_str(), txData.length());
         Packet outPkt = Packet(txData.c_str(), txData.length(), DEVICE_ADDRESS, TARGET_ADDRESS);
-        Serial.println(outPkt.GetSummary().c_str());
-        outPkt.Transmit(trans);
+        //Serial.println(outPkt.GetSummary().c_str());
+        bool goodTrans = false;
+        while (!goodTrans) {
+          //Serial.println("OUTGOING:");
+          goodTrans = outPkt.Transmit(trans);
+          if (!goodTrans) {
+            delay(1000);
+            Serial.println("deLAY");
+            Timer1.restart();
+            Timer1.start();
+          }
+        }
         break;
       }
 
     } else {
       //trans.transmit(txData.c_str(), txData.length());
       Packet outPkt = Packet(txData.c_str(), txData.length(), DEVICE_ADDRESS, TARGET_ADDRESS);
-      Serial.println(outPkt.GetSummary().c_str());
-      outPkt.Transmit(trans);
+      //Serial.println(outPkt.GetSummary().c_str());
+      bool goodTrans = false;
+      while (!goodTrans) {
+        goodTrans = outPkt.Transmit(trans);
+        if (!goodTrans) {
+          delay(1000);
+          Timer1.restart();
+          Timer1.start();
+          Serial.println("deLAY");
+        }
+      }
       break;
     }
     txData = "";
@@ -231,6 +272,7 @@ void transmitSerial() {
 }
 
 void WipeRxData() {
+  //Serial.println("WIPED!");
   for (int i = 0; i < sizeof(rxData); i++) {
     rxData[i] = 0;
   }

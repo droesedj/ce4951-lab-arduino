@@ -36,11 +36,11 @@ bool Transmitter::transmit(byte* data, int len) {
     for (int j = 0; j < 8 && isTransmitting; j++) {
 
       //If the rx line goes low, assume collision.
-      int rxVal = digitalRead(3);
+      /*int rxVal = digitalRead(3);
       if(rxVal == LOW){
         isTransmitting = false;
         return false;
-      }
+      }*/
       
       // Start at the MSB. binary AND with 1.  This gives us one bit.
       // Shift the data starting from MSB down to bit 0.

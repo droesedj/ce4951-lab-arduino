@@ -50,6 +50,9 @@ class Packet {
     String GetDataString();
     /// Returns a string summary of the packet.
     String GetSummary();
+
+    byte GetSource();
+    byte GetDestination();
 };
 
 #endif
